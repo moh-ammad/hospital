@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// Prisma Schema for Multi-Tenant CRM-EMR Integration
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Support multiple clients/practices via UI entry
+model Client {
+  id               Int           @id @default(autoincrement())
+  name             String        @unique
+  active           Boolean       @default(true)
+  
+  // IntakeQ (EMR) Configuration
+  intakeQKey       String
+  intakeQBaseUrl   String        @default("https://intakeq.com/api/v1")
+  
+  // Vtiger (CRM) Configuration
+  vtigerUrl        String        // e.g. https://dev.hcdcrm.com/webservice.php
+  vtigerUsername   String?
+  vtigerAccessKey  String?
+  
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  appointments     Appointment[]
+  leads            Lead[]
+
+  @@index([name])
+}
+
+model Lead {
+  id               Int      @id @default(autoincrement())
+  clientId         Int
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Vtiger Primary ID (e.g. "10x1050")
+  vtigerId         String   @unique
+  lead_no          String?
+  
+  // Name & Contact
+  salutationtype   String?
+  firstname        String?
+  lastname         String?
+  email            String?
+  phone            String?
+  mobile           String?
+  secondaryemail   String?
+  fax              String?
+  
+  // Company & Professional
+  company          String?
+  designation      String?
+  industry         String?
+  website          String?
+  
+  // Lead Metadata
+  leadsource       String?
+  leadstatus       String?
+  annualrevenue    String?
+  rating           String?
+  noofemployees    String?
+  assigned_user_id String?
+  source           String?  @default("WEBSERVICE")
+  starred          String?
+  tags             String?
+  
+  // Address Info
+  lane             String?
+  code             String?
+  city             String?
+  country          String?
+  state            String?
+  pobox            String?
+  
+  // Custom Fields from leads.json
+  cf_883           String?
+  cf_941           String?  // Appointment Status
+  cf_943           String?  // Appointment Booked
+  
+  description      String?  @db.Text
+  emailoptout      String?  @default("0")
+  
+  // Vtiger Timestamps
+  createdtime      String?
+  modifiedtime     String?
+  modifiedby       String?
+  
+  // Raw JSON Backup - ensures nothing is missed if schema changes
+  rawData          Json?    
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([email])
+}
+
+model Appointment {
+  id                Int      @id @default(autoincrement())
+  clientId          Int
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // IntakeQ Primary ID
+  intakeQId         String   @unique
+  
+  // Client Info
+  clientName        String?  
+  clientEmail       String?  
+  clientPhone       String?  
+  clientDateOfBirth String?  
+  intakeQClientId   Int?     
+
+  // Appointment Status & Details
+  status            String?  
+  startDate         BigInt?  
+  endDate           BigInt?  
+  duration          Int?     
+  serviceName       String?  
+  serviceId         String?  
+  locationName      String?  
+  locationId        String?  
+  price             Float?   
+  
+  // Practitioner Info
+  practitionerName  String?  
+  practitionerEmail String?  
+  practitionerId    String?  
+  
+  // Timing Strings
+  startDateIso      String?
+  endDateIso        String?
+  startDateLocal    String?
+  endDateLocal      String?
+  startDateLocalFormatted String?
+
+  // Financial & Notes
+  invoiceId         String?
+  invoiceNumber     Int?
+  clientNote        String?  @db.Text
+  practitionerNote  String?  @db.Text
+  
+  // Telehealth Object from appointments.json
+  telehealthInfo    Json?
+  
+  // System Metadata
+  intakeId          String?
+  dateCreated       BigInt?
+  createdBy         String?
+  bookedByClient    Boolean?
+  lastModified      BigInt?
+  attendanceConfirmationResponse String?
+  reminderType      String?
+  placeOfService    String?
+  
+  // Cancellations
+  fullCancellationReason String? @db.Text
+  cancellationReasonNote String? @db.Text
+  cancellationDate       String?
+
+  // Custom Fields & Arrays
+  customFields      Json?
+  additionalClients Json?
+  
+  // Raw JSON Backup
+  rawData           Json?    
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([clientEmail])
+}

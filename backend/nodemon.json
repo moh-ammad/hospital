@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "data/**",
+    "generated/**",
+    "node_modules/**",
+    "backend/data/**"
+  ],
+  "watch": ["index.js", "services", "utils", "routes"],
+  "ext": "js,json"
+}
