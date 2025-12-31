@@ -17,152 +17,186 @@ datasource db {
 
 // Support multiple clients/practices via UI entry
 model Client {
-  id               Int           @id @default(autoincrement())
-  name             String        @unique
-  active           Boolean       @default(true)
-  
-  // IntakeQ (EMR) Configuration
-  intakeQKey       String
-  intakeQBaseUrl   String        @default("https://intakeq.com/api/v1")
-  
-  // Vtiger (CRM) Configuration
-  vtigerUrl        String        // e.g. https://dev.hcdcrm.com/webservice.php
-  vtigerUsername   String?
-  vtigerAccessKey  String?
-  
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id Int @id @default(autoincrement())
 
-  // Relations
-  appointments     Appointment[]
-  leads            Lead[]
+  // Name is just a label now (NOT identity)
+  name String
 
+  active Boolean @default(true)
+
+  // TRUE identity for IntakeQ
+  intakeQKey     String @unique
+  intakeQBaseUrl String @default("https://intakeq.com/api/v1")
+
+  // Vtiger (CRM)
+  vtigerUrl       String
+  vtigerUsername  String?
+  vtigerAccessKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (unchanged, SAFE)
+  appointments Appointment[]
+  leads        Lead[]
+
+  // Keep index for searching by name
   @@index([name])
 }
 
 model Lead {
-  id               Int      @id @default(autoincrement())
-  clientId         Int
-  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  
-  // Vtiger Primary ID (e.g. "10x1050")
-  vtigerId         String   @unique
-  lead_no          String?
-  
-  // Name & Contact
-  salutationtype   String?
-  firstname        String?
-  lastname         String?
-  email            String?
-  phone            String?
-  mobile           String?
-  secondaryemail   String?
-  fax              String?
-  
-  // Company & Professional
-  company          String?
-  designation      String?
-  industry         String?
-  website          String?
-  
-  // Lead Metadata
-  leadsource       String?
-  leadstatus       String?
-  annualrevenue    String?
-  rating           String?
-  noofemployees    String?
+  // Internal DB ID
+  id Int @id @default(autoincrement())
+
+  // Tenant / Client
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // --- VTIGER CORE IDS ---
+  // Example: "10x1046"
+  vtigerId String  @unique
+  lead_no  String?
+
+  // --- NAME & CONTACT ---
+  salutationtype String?
+  firstname      String?
+  lastname       String?
+  email          String?
+  phone          String?
+  mobile         String?
+  secondaryemail String?
+  fax            String?
+
+  // --- COMPANY & PROFESSIONAL ---
+  company     String?
+  designation String?
+  industry    String?
+  website     String?
+
+  // --- LEAD METADATA ---
+  leadsource String?
+  leadstatus String?
+
+  // Vtiger sends "0.00000000" as string
+  annualrevenue String?
+
+  rating String?
+
+  // Vtiger sends "0" as string
+  noofemployees String?
+
+  // Example: "19x19"
   assigned_user_id String?
-  source           String?  @default("WEBSERVICE")
-  starred          String?
-  tags             String?
-  
-  // Address Info
-  lane             String?
-  code             String?
-  city             String?
-  country          String?
-  state            String?
-  pobox            String?
-  
-  // Custom Fields from leads.json
-  cf_883           String?
-  cf_941           String?  // Appointment Status
-  cf_943           String?  // Appointment Booked
-  
-  description      String?  @db.Text
-  emailoptout      String?  @default("0")
-  
-  // Vtiger Timestamps
-  createdtime      String?
-  modifiedtime     String?
-  modifiedby       String?
-  
-  // Raw JSON Backup - ensures nothing is missed if schema changes
-  rawData          Json?    
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+
+  source  String? @default("CRM")
+  starred String? @default("0") // "0" | "1"
+  tags    String?
+
+  // --- ADDRESS INFO ---
+  lane    String?
+  code    String?
+  city    String?
+  country String?
+  state   String?
+  pobox   String?
+
+  // --- CUSTOM FIELDS (FROM DESCRIBE + PAYLOAD) ---
+  cf_883 String?
+
+  // StatusEMR
+  cf_941 String? @default("Pending")
+
+  // Appointment Booked
+  cf_943 String? @default("No")
+
+  // No of Appointments
+  cf_945 String?
+
+  // Appointment Details (can be null) - using LongText for large HTML content
+  cf_947 String? @db.LongText
+
+  // --- MISC ---
+  description String? @db.Text
+
+  // "0" | "1"
+  emailoptout String? @default("0")
+
+  // --- VTIGER TIMESTAMPS ---
+  // Converted to DateTime when inserting
+  createdtime  DateTime?
+  modifiedtime DateTime?
+  modifiedby   String?
+
+  // --- RAW BACKUP (VERY IMPORTANT) ---
+  // Keeps original payload forever
+  rawData Json?
+
+  // --- SYSTEM ---
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([clientId])
   @@index([email])
+  @@index([vtigerId])
 }
 
 model Appointment {
-  id                Int      @id @default(autoincrement())
-  clientId          Int
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       Int    @id @default(autoincrement())
+  clientId Int
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   // IntakeQ Primary ID
-  intakeQId         String   @unique
-  
+  intakeQId String @unique
+
   // Client Info
-  clientName        String?  
-  clientEmail       String?  
-  clientPhone       String?  
-  clientDateOfBirth String?  
-  intakeQClientId   Int?     
+  clientName        String?
+  clientEmail       String?
+  clientPhone       String?
+  clientDateOfBirth String?
+  intakeQClientId   Int?
 
   // Appointment Status & Details
-  status            String?  
-  startDate         BigInt?  
-  endDate           BigInt?  
-  duration          Int?     
-  serviceName       String?  
-  serviceId         String?  
-  locationName      String?  
-  locationId        String?  
-  price             Float?   
-  
+  status       String?
+  startDate    BigInt?
+  endDate      BigInt?
+  duration     Int?
+  serviceName  String?
+  serviceId    String?
+  locationName String?
+  locationId   String?
+  price        Float?
+
   // Practitioner Info
-  practitionerName  String?  
-  practitionerEmail String?  
-  practitionerId    String?  
-  
+  practitionerName  String?
+  practitionerEmail String?
+  practitionerId    String?
+
   // Timing Strings
-  startDateIso      String?
-  endDateIso        String?
-  startDateLocal    String?
-  endDateLocal      String?
+  startDateIso            String?
+  endDateIso              String?
+  startDateLocal          String?
+  endDateLocal            String?
   startDateLocalFormatted String?
 
   // Financial & Notes
-  invoiceId         String?
-  invoiceNumber     Int?
-  clientNote        String?  @db.Text
-  practitionerNote  String?  @db.Text
-  
+  invoiceId        String?
+  invoiceNumber    Int?
+  clientNote       String? @db.Text
+  practitionerNote String? @db.Text
+
   // Telehealth Object from appointments.json
-  telehealthInfo    Json?
-  
+  telehealthInfo Json?
+
   // System Metadata
-  intakeId          String?
-  dateCreated       BigInt?
-  createdBy         String?
-  bookedByClient    Boolean?
-  lastModified      BigInt?
+  intakeId                       String?
+  dateCreated                    BigInt?
+  createdBy                      String?
+  bookedByClient                 Boolean?
+  lastModified                   BigInt?
   attendanceConfirmationResponse String?
-  reminderType      String?
-  placeOfService    String?
-  
+  reminderType                   String?
+  placeOfService                 String?
+
   // Cancellations
   fullCancellationReason String? @db.Text
   cancellationReasonNote String? @db.Text
@@ -171,11 +205,11 @@ model Appointment {
   // Custom Fields & Arrays
   customFields      Json?
   additionalClients Json?
-  
+
   // Raw JSON Backup
-  rawData           Json?    
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  rawData   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([clientId])
   @@index([clientEmail])

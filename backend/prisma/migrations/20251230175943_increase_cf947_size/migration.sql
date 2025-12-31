@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `lead` MODIFY `cf_947` LONGTEXT NULL;

@@ -1,6 +1,6 @@
 import express from "express";
 import { fetchAppointments } from "./appointmentFetcher.js";
-import { getClientConfig } from "../config/clientConfig.js";
+import prisma from "../utils/prismaClient.js";
 import { loadClientFile } from "../utils/fileStore.js";
 
 
@@ -18,27 +18,42 @@ const router = express.Router();
  */
 router.post("/sync", async (req, res) => {
   // `range` is optional; default to 'all' (fetch all appointments)
-  const { clientName, apiKey, apiUrl } = req.body;
-  let { range } = req.body;
+  const { clientName } = req.body;
+  let { apiKey, apiUrl, range } = req.body;
 
-  if (!clientName || !apiKey || !apiUrl) {
-    return res.status(400).json({
-      success: false,
-      error: "clientName, apiKey and apiUrl are required"
-    });
+  if (!clientName) {
+    return res.status(400).json({ success: false, error: "clientName is required" });
   }
 
-  range = range || "all";
-
+  // If apiKey/apiUrl not provided, read from DB for the client
   try {
-    const config = getClientConfig({
-      clientName,
-      apiKey,
-      apiUrl
-    });
+    if (!apiKey || !apiUrl) {
+      const client = await prisma.client.findFirst({ where: { name: clientName } });
+      if (!client) {
+        return res.status(404).json({ success: false, error: "Client not found" });
+      }
+
+      if (!apiKey) apiKey = client.intakeQKey;
+      if (!apiUrl) {
+        // normalize base url and append appointments path
+        const base = (client.intakeQBaseUrl || "").replace(/\/$/, "");
+        apiUrl = base ? `${base}/appointments` : undefined;
+      }
+    }
+
+    if (!apiKey || !apiUrl) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing intakeQ key or base URL for this client"
+      });
+    }
+
+    range = range || "all";
+
+    const config = { clientName, apiKey, apiUrl };
 
     // Run sync in background to avoid client timeouts; respond immediately.
-    fetchAppointments(config, range).catch(err => {
+    fetchAppointments(config).catch(err => {
       console.error("Background sync failed:", err);
     });
 
@@ -48,11 +63,7 @@ router.post("/sync", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Sync submission failed:", err);
-
-    return res.status(500).json({
-      success: false,
-      error: err.message || "Internal server error"
-    });
+    return res.status(500).json({ success: false, error: err.message || "Internal server error" });
   }
 });
 
