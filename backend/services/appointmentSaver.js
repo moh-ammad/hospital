@@ -8,16 +8,17 @@ export async function saveAppointments(appts, intakeQKey, practiceName) {
   if (!arr || arr.length === 0) return;
 
   const mapped = arr.map(mapAppointment);
-  const clientName = practiceName ?? mapped[0]?.clientName ?? "Unknown";
+  // Use the practiceName parameter to identify the practice/clinic, NOT the patient name
+  const practiceClientName = practiceName ?? "Unknown";
 
   try {
     // Upsert client using intakeQKey as unique identity
-    // Replace the entire client lookup/create block in saveAppointmentsFromJson with this:
+    // The "client" here represents the practice/clinic (e.g., "Pure Balance")
     const client = await prisma.client.upsert({
       where: { intakeQKey: intakeQKey ?? "" }, // Uses intakeQKey as the unique identifier
-      update: { name: clientName },            // Update name if it changed
+      update: { name: practiceClientName },     // Update practice name if it changed
       create: {
-        name: clientName ?? "Unknown",
+        name: practiceClientName,
         intakeQKey: intakeQKey ?? "",
         intakeQBaseUrl: "https://intakeq.com/api/v1",
         vtigerUrl: "",
@@ -26,6 +27,8 @@ export async function saveAppointments(appts, intakeQKey, practiceName) {
 
 
     // Attach clientId to all appointments
+    // IMPORTANT: mapped appointments already have the correct patient names from mapAppointment()
+    // Do NOT overwrite the clientName field - it contains the patient's name from IntakeQ
     const data = mapped.map((m) => ({ ...m, clientId: client.id }));
 
     if (data.length === 0) return;
@@ -35,7 +38,7 @@ export async function saveAppointments(appts, intakeQKey, practiceName) {
       skipDuplicates: true, // ensures no duplicates based on intakeQId
     });
 
-    console.log(`Inserted ${result.count ?? data.length} appointments for '${client.name}'.`);
+    console.log(`Inserted ${result.count ?? data.length} appointments for practice '${client.name}'.`);
     return result;
   } catch (err) {
     console.error("Error saving appointments:", err);
@@ -46,8 +49,8 @@ export async function saveAppointments(appts, intakeQKey, practiceName) {
 /**
  * Read stored JSON for a client and bulk-insert appointments.
  * Looks for file: backend/data/<client-folder>/appointments.json
- * @param {string} clientName - client folder/name (e.g. "Pure Balance")
- * @param {string} [intakeQKey] - optional intakeQKey; used to identify the client when present
+ * @param {string} clientName - Practice/clinic name (e.g. "Pure Balance")
+ * @param {string} [intakeQKey] - optional intakeQKey; used to identify the practice when present
  */
 export async function saveAppointmentsFromJson(clientName, intakeQKey) {
   const folderName = clientName ? clientName.toLowerCase().replace(/\s+/g, "-") : "unknown";
@@ -68,10 +71,10 @@ export async function saveAppointmentsFromJson(clientName, intakeQKey) {
     return;
   }
 
-  // Map appointments
+  // Map appointments - this preserves the patient names from IntakeQ
   const mapped = appts.map(mapAppointment);
 
-  // Find or create client. Prefer lookup by intakeQKey when provided.
+  // Find or create practice/clinic. Prefer lookup by intakeQKey when provided.
   let client = null;
   if (intakeQKey) {
     client = await prisma.client.findFirst({ where: { intakeQKey } });
@@ -98,6 +101,7 @@ export async function saveAppointmentsFromJson(clientName, intakeQKey) {
   }
 
   // Attach clientId to all mapped appointments
+  // IMPORTANT: Do NOT overwrite clientName - it contains patient names from IntakeQ
   const data = mapped.map((m) => ({ ...m, clientId: client.id }));
 
   if (data.length === 0) {
@@ -106,6 +110,6 @@ export async function saveAppointmentsFromJson(clientName, intakeQKey) {
   }
 
   const result = await prisma.appointment.createMany({ data, skipDuplicates: true });
-  console.log(`Inserted ${result.count ?? data.length} appointments for client '${client.name}'.`);
+  console.log(`Inserted ${result.count ?? data.length} appointments for practice '${client.name}'.`);
   return result;
 }
